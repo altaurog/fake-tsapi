@@ -1,0 +1,12 @@
+deps/
+__pycache__/
+.*cache/
+*.egg-info/
+
+nohup.out
+config
+config-*
+venv/
+
+*.pdf
+*.dot
