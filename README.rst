@@ -7,7 +7,7 @@ Features
 ---------
 
 * openapi documentation
-* csv or json response
+* multiple response formats
 * query by series id or tag
 * multiple series
 * time range
