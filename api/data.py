@@ -104,7 +104,8 @@ def get_series(s: dict, start: float, end: float):
     return pd.Series(d, index=t)
 
 def timestamps(start: float, end: float):
-    count = int(end - start) // 120  # samples every two minutes on average
+    # sample every two minutes on average, but limit total count
+    count = min(200000, int(end - start) // 120)
     s, e = random(2) * 120
     ts = to_range((1 - random(count - 1)).cumsum(), start + s, end - e)
     return pd.to_datetime(np.round(ts), unit='s').drop_duplicates()
