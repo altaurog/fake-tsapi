@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 from typing import List
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -61,5 +62,7 @@ def get_data(
     specs = data.compile_query(ids or "", tags or "")
     schema = {**data.schema(specs), "location": location}
     df = data.get_data(schema["series"], start.timestamp(), end.timestamp())
-    pdf = df[[s[0] for s in specs]]
-    return pdf.to_csv(index_label='timestamp', float_format="%0.3f")
+    pdf = df[[s["series"] for s in schema["fields"]]]
+    response = pdf.to_csv(index_label='timestamp', float_format="%0.3f")
+    headers = {'Content-Schema': json.dumps(schema)}
+    return Response(content=response, headers=headers)
