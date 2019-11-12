@@ -51,7 +51,9 @@ def field(spec: list) -> dict:
 
 def get_data(series: Dict[str, dict], start: float, end: float):
     data = partial(get_series, start=start, end=end)
-    return pd.DataFrame({s: data(d) for s, d in series.items()})
+    df = pd.DataFrame({s: data(d) for s, d in series.items()})
+    df.index.name = 'timestamp'
+    return df
 
 def get_series(s: dict, start: float, end: float):
     t = pd.to_datetime(np.round(timestamps(start, end)), unit='s')

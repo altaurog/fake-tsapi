@@ -1,7 +1,10 @@
 from datetime import datetime
+import io
 import json
-from typing import List
+from typing import Dict, List
 from fastapi import APIRouter, HTTPException, Query
+from matplotlib import pyplot as plt
+import pandas as pd
 from pydantic import BaseModel
 from starlette.responses import Response
 
@@ -47,7 +50,18 @@ def list_tags(location: str, q: str = None):
     return {"data": list(found)}
 
 
-@router.get("/location/{location}/data", response_class=CSVResponse)
+@router.get("/location/{location}/data",
+    response_class=CSVResponse,
+    responses={
+        200: {"content": {
+            "application/json": {},
+            "text/html": {},
+            "text/plain": {},
+            "image/png": {},
+        }},
+        406: {"model": ErrorMessage, "description": "Unrecognized format"},
+    },
+)
 def get_data(
         location: str,
         start: datetime,
@@ -55,6 +69,7 @@ def get_data(
         period: str = Query(None, regex=r"\d+(i:[hdwmqy]|min)"),
         ids: str = None,
         tags: str = None,
+        format: str = 'csv',
     ):
     "Get series data for a location"
     if location not in cities.cities:
@@ -62,7 +77,28 @@ def get_data(
     specs = data.compile_query(ids or "", tags or "")
     schema = {**data.schema(specs), "location": location}
     df = data.get_data(schema["series"], start.timestamp(), end.timestamp())
-    pdf = df[[s["series"] for s in schema["fields"]]]
-    response = pdf.to_csv(index_label='timestamp', float_format="%0.3f")
     headers = {'Content-Schema': json.dumps(schema)}
-    return Response(content=response, headers=headers)
+    return response(format, df[[s["series"] for s in schema["fields"]]], headers)
+
+def response(fmt: str, df: pd.DataFrame, headers: Dict[str, str]) -> Response:
+    if fmt == "csv":
+        res = df.to_csv(float_format="%0.3f")
+        return Response(content=res, headers=headers)
+    if fmt == "json":
+        res = df.reset_index(
+            ).to_json(orient="records", date_format="iso", double_precision=3)
+        return Response(content=res, headers=headers, media_type="application/json")
+    if fmt == "html":
+        res = df.to_html(na_rep="", float_format="%0.3f")
+        return Response(content=res, headers=headers, media_type="text/html")
+    if fmt == "text":
+        res = df.to_string(na_rep="", float_format="%0.3f")
+        return Response(content=res, headers=headers, media_type="text/plain")
+    if fmt == "png":
+        plt.figure()
+        df.plot()
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png')
+        plt.close()
+        return Response(content=buf.getvalue(), headers=headers, media_type="image/png")
+    raise HTTPException(status_code=406, detail="Unrecognized format: " + fmt)
