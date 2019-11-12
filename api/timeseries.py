@@ -59,6 +59,7 @@ def list_tags(location: str, q: str = None):
             "text/plain": {},
             "image/png": {},
         }},
+        400: {"model": ErrorMessage, "description": "Illegal parameters"},
         406: {"model": ErrorMessage, "description": "Unrecognized format"},
     },
 )
@@ -66,7 +67,7 @@ def get_data(
         location: str,
         start: datetime,
         end: datetime,
-        period: str = Query(None, regex=r"\d+(i:[hdwmqy]|min)"),
+        period: str = Query(None, regex=r"^\d+(?i:[shdwmqy]|min)$"),
         ids: str = None,
         tags: str = None,
         format: str = 'csv',
@@ -75,10 +76,12 @@ def get_data(
     if location not in cities.cities:
         raise HTTPException(status_code=404, detail="Location not found")
     specs = data.compile_query(ids or "", tags or "")
+    freqstr = data.validate(specs, period)
     schema = {**data.schema(specs), "location": location}
     df = data.get_data(schema["series"], start.timestamp(), end.timestamp())
+    pdf = data.process_data(df, freqstr, specs)
     headers = {'Content-Schema': json.dumps(schema)}
-    return response(format, df[[s["series"] for s in schema["fields"]]], headers)
+    return response(format, pdf, headers)
 
 def response(fmt: str, df: pd.DataFrame, headers: Dict[str, str]) -> Response:
     if fmt == "csv":

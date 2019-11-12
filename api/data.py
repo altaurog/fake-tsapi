@@ -5,6 +5,7 @@ from itertools import chain
 from functools import partial, reduce
 from typing import Dict, List, Set
 
+from fastapi import HTTPException
 import numpy as np
 import pandas as pd
 random = np.random.random   # pylint: disable=no-member
@@ -15,10 +16,11 @@ def get_tags() -> Set[str]:
 
 def compile_query(idstr: str, tagstr: str):
     f = lambda s: map(parse_spec, s.replace(' ', '').split(','))
-    return list(f(idstr)) + expand_tags(data_series, list(f(tagstr)))
+    g = lambda s: list(f(s)) if s else []
+    return g(idstr) + expand_tags(data_series, g(tagstr))
 
 def parse_spec(qstr: str) -> list:
-    return [qstr]
+    return qstr.split(".")
 
 def expand_tags(series: dict, specs: List[list]) -> List[list]:
     def tag_reduce(agg, spec):
@@ -28,6 +30,45 @@ def expand_tags(series: dict, specs: List[list]) -> List[list]:
 
 def get_tag(series: dict, tag: str) -> List[str]:
     return [s for s, d in series.items() if tag in d.get("tags", [])]
+
+def validate(specs, period):
+    sigs = set(map(len, specs))
+    if any(map(lambda x: x > 2, sigs)):
+        raise HTTPException(
+            status_code=400,
+            detail="Repeated aggregation not supported",
+        )
+    if len(sigs) > 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Aggregate and non-aggregate series may not be mixed",
+        )
+    if 1 in sigs and period is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Period is not supported with non-aggregate series",
+        )
+    if 2 in sigs and period is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Period is required with aggregate series",
+        )
+    for s in specs:
+        validate_spec(*s)
+    return validate_period(period)
+
+def validate_spec(_, *agg_funcs):
+    diff = set(agg_funcs).difference(["count", "max", "min", "mean", "std", "sum"])
+    if diff:
+        raise HTTPException(
+            status_code=400,
+            detail="Unrecognized aggregation function: " + ",".join(diff),
+        )
+
+def validate_period(period):
+    if period is None:
+        return None
+    return period.upper().replace('MIN', 'T').replace('Y', 'A')
 
 def schema(specs: List[list]) -> dict:
     found = list(filter(None, map(field, specs)))
@@ -44,10 +85,12 @@ def field(spec: list) -> dict:
     if not series:
         return {}
     return {
-        "name": "".join(map(str, spec)),
+        "name": spec_name(spec),
         "type": "number",
         "series": spec[0],
     }
+
+spec_name = ".".join
 
 def get_data(series: Dict[str, dict], start: float, end: float):
     data = partial(get_series, start=start, end=end)
@@ -56,14 +99,15 @@ def get_data(series: Dict[str, dict], start: float, end: float):
     return df
 
 def get_series(s: dict, start: float, end: float):
-    t = pd.to_datetime(np.round(timestamps(start, end)), unit='s')
+    t = timestamps(start, end)
     d = fake_data(len(t), *s["range"])
     return pd.Series(d, index=t)
 
 def timestamps(start: float, end: float):
     count = int(end - start) // 120  # samples every two minutes on average
     s, e = random(2) * 120
-    return to_range(random(count - 1).cumsum(), start + s, end - e)
+    ts = to_range((1 - random(count - 1)).cumsum(), start + s, end - e)
+    return pd.to_datetime(np.round(ts), unit='s').drop_duplicates()
 
 def fake_data(count: int, lower_bound: float, upper_bound: float):
     drange = upper_bound - lower_bound
@@ -73,6 +117,15 @@ def fake_data(count: int, lower_bound: float, upper_bound: float):
 def to_range(data, lb, ub):
     dmin, dmax = data.min(), data.max()
     return (data - dmin) * (ub - lb) / (dmax - dmin) + lb
+
+def process_data(df, period, specs):
+    return pd.DataFrame({spec_name(s): apply_spec(df, period, *s) for s in specs})
+
+def apply_spec(df, period, series, *agg):
+    s = df[series]
+    if agg:
+        return getattr(s.resample(period), agg[0])()
+    return s
 
 data_series: dict = {
     "temp": {
