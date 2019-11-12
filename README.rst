@@ -23,6 +23,12 @@ TODO
 Running
 -------
 
+Run with ``docker-compose up``
+
+**OR**
+
+Install dependencies ``pip install -r requirements.txt``
+
 Run server with ``uvicorn api.app:app``
 
 Run tests with ``pytest test``
