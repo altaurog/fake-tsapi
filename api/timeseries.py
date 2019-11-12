@@ -129,7 +129,7 @@ def get_data(
     freqstr = data.validate(specs, period)
     schema = {**data.schema(specs), "location": location}
     df = data.get_data(schema["series"], start.timestamp(), end.timestamp())
-    pdf = data.process_data(df, freqstr, specs)
+    pdf = data.process_data(df, freqstr, schema["fields"])
     headers = {'Content-Schema': json.dumps(schema)}
     return response(format, pdf, headers)
 

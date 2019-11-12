@@ -88,6 +88,7 @@ def field(spec: list) -> dict:
         "name": spec_name(spec),
         "type": "number",
         "series": spec[0],
+        "spec": spec,
     }
 
 spec_name = ".".join
@@ -119,8 +120,9 @@ def to_range(data, lb, ub):
     dmin, dmax = data.min(), data.max()
     return (data - dmin) * (ub - lb) / (dmax - dmin) + lb
 
-def process_data(df, period, specs):
-    return pd.DataFrame({spec_name(s): apply_spec(df, period, *s) for s in specs})
+def process_data(df, period, fields):
+    d = {f["name"]: apply_spec(df, period, *f["spec"]) for f in fields}
+    return pd.DataFrame(d)
 
 def apply_spec(df, period, series, *agg):
     s = df[series]
