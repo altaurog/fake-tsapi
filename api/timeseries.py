@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import List
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
+from starlette.responses import Response
 
 from . import cities, data, util
 
@@ -12,6 +13,9 @@ class ItemList(BaseModel):
 
 class ErrorMessage(BaseModel):
     detail: str
+
+class CSVResponse(Response):
+    media_type = "text/csv"
 
 responses = {
     "responses": {
@@ -42,7 +46,7 @@ def list_tags(location: str, q: str = None):
     return {"data": list(found)}
 
 
-@router.get("/location/{location}/data")
+@router.get("/location/{location}/data", response_class=CSVResponse)
 def get_data(
         location: str,
         start: datetime,
@@ -55,5 +59,7 @@ def get_data(
     if location not in cities.cities:
         raise HTTPException(status_code=404, detail="Location not found")
     specs = data.compile_query(ids or "", tags or "")
-    scema = {**data.schema(specs), "location": location}
-    return {"data": ["abcd", "efg"]}
+    schema = {**data.schema(specs), "location": location}
+    df = data.get_data(schema["series"], start.timestamp(), end.timestamp())
+    pdf = df[[s[0] for s in specs]]
+    return pdf.to_csv(index_label='timestamp', float_format="%0.3f")

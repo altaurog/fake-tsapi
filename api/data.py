@@ -2,10 +2,11 @@
 dummy data backend
 """
 from itertools import chain
-from functools import reduce
-from typing import List, Set
+from functools import partial, reduce
+from typing import Dict, List, Set
 
 import numpy as np
+import pandas as pd
 random = np.random.random   # pylint: disable=no-member
 
 def get_tags() -> Set[str]:
@@ -33,7 +34,8 @@ def schema(specs: List[list]) -> dict:
     not_found = [s[0] for s in specs if s[0] not in data_series]
     return {
         "fields": found,
-        "missingValues": not_found,
+        "missingValues": [""],
+        "notFound": not_found,
         "series": {f["series"]: data_series.get(f["series"], {}) for f in found},
     }
 
@@ -43,68 +45,76 @@ def field(spec: list) -> dict:
         return {}
     return {
         "name": "".join(map(str, spec)),
-        "type": series["type"],
+        "type": "number",
         "series": spec[0],
     }
+
+def get_data(series: Dict[str, dict], start: float, end: float):
+    data = partial(get_series, start=start, end=end)
+    return pd.DataFrame({s: data(d) for s, d in series.items()})
+
+def get_series(s: dict, start: float, end: float):
+    t = pd.to_datetime(np.round(timestamps(start, end)), unit='s')
+    d = fake_data(len(t), *s["range"])
+    return pd.Series(d, index=t)
+
+def timestamps(start: float, end: float):
+    count = int(end - start) // 120  # samples every two minutes on average
+    s, e = random(2) * 120
+    return to_range(random(count - 1).cumsum(), start + s, end - e)
 
 def fake_data(count: int, lower_bound: float, upper_bound: float):
     drange = upper_bound - lower_bound
     lb, ub = np.sort(random(2) * drange + lower_bound)
-    rand = (random(count) - 0.5).cumsum()
-    rrange = rand.max() - rand.min()
-    return (rand - rand.min()) * (ub - lb) / rrange + lb
+    return to_range((random(count) - 0.5).cumsum(), lb, ub)
+
+def to_range(data, lb, ub):
+    dmin, dmax = data.min(), data.max()
+    return (data - dmin) * (ub - lb) / (dmax - dmin) + lb
 
 data_series: dict = {
     "temp": {
         "description": "Temperature",
-        "type": "number",
         "unit": "°C",
         "range": (-4, 44),
         "tags": ["feel"],
     },
     "pressure": {
         "description": "Atmospheric Pressure",
-        "type": "number",
         "range": (995, 1018),
         "unit": "hPa",
     },
     "humidity": {
         "description": "Relative Humidity",
-        "type": "number",
         "unit": "%",
         "range": (0, 90),
         "tags": ["feel", "water"],
     },
     "dew": {
         "description": "Dew Point",
-        "type": "number",
         "unit": "°C",
         "range": (1, 14),
         "tags": ["water"],
     },
     "winds": {
         "description": "Wind Speed",
-        "type": "number",
         "unit": "km/h",
         "range": (0, 50),
         "tags": ["feel"],
     },
     "windd": {
         "description": "Wind Direction",
-        "type": "number",
         "unit": "°",
         "range": (0, 360),
     },
     "precip": {
         "description": "Precipitation",
-        "type": "number",
         "unit": "mm",
         "range": (0, 30),
         "tags": ["water"],
     },
     "part": {
         "description": "Particulate Matter",
-        "type": "number",
         "unit": "µg/m3",
         "range": (0, 100),
         "tags": ["quality"],
