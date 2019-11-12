@@ -7,10 +7,22 @@ Features
 ---------
 
 * openapi documentation
+* ReDoc (``/redoc``) and Swagger UI (``/docs``)
 * multiple response formats
 * query by series id or tag
 * multiple series
 * time range
 * aggregations (with period specified)
-* thresholds
 * frictionless schema response header
+
+TODO
+----
+* thresholds
+* query multiple locations
+
+Running
+-------
+
+Run server with ``uvicorn api.app:app``
+
+Run tests with ``pytest test``

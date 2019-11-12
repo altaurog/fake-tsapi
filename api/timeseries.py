@@ -72,7 +72,57 @@ def get_data(
         tags: str = None,
         format: str = 'csv',
     ):
-    "Get series data for a location"
+    """
+    Get series data for a location
+
+    [Frictionless data](https://frictionlessdata.io/specs/table-schema/)
+    schema is included in `Content-Schema` response header.
+
+    ## query parameters:
+
+    **start**:
+        timestamp in ISO 8601 format: `2019-10-12T21:07:00+03:00`
+
+    **end**:
+        timestamp in ISO 8601 format.
+
+    **period**:
+        aggregation period length.
+        Must be an integer followed by a unit: `30min`
+        (see units below).
+
+    **ids**:
+        comma-separated list of series ids to query,
+        with optional aggregation (see below).
+
+    **tags**:
+        comma-separated list of series tags,
+        with optional aggregation (see below).
+
+    **format**:
+        response format.
+        One of `csv` (default), `json`, `html`, `text`, `png`
+
+    ## aggregation:
+
+    Aggregation is specified as a qualifier on ids and tags: `temp.mean`
+
+    Available aggregations are:
+    `count`, `max`, `min`, `mean`, `std`, `sum`.
+
+    ### period units:
+
+        === =======
+        s   second
+        min minute
+        h   hour
+        d   day
+        w   week
+        m   month
+        q   quarter
+        y   year
+        === =======
+    """
     if location not in cities.cities:
         raise HTTPException(status_code=404, detail="Location not found")
     specs = data.compile_query(ids or "", tags or "")
